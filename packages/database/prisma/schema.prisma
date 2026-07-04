@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------
+// 1. Core Domain Model
+// ------------------------------------------------------
+
+/// The immutable identity of an object in the system.
+model Entity {
+  id        String   @id @default(uuid())
+  kind      String   // hierarchical, e.g., 'game.weapon', 'homelab.server'
+  owner     String   // user id or 'system'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  spaceId   String?
+  space     Space?   @relation(fields: [spaceId], references: [id])
+
+  states        EntityState[]
+  relationships Relationship[] @relation("SourceEntity")
+  targets       Relationship[] @relation("TargetEntity")
+  observations  Observation[]
+  events        TimelineEvent[]
+  assets        Asset[]
+  tags          Tag[]
+}
+
+/// The current mutable data of the Entity.
+model EntityState {
+  id        String   @id @default(uuid())
+  entityId  String
+  title     String?
+  slug      String?
+  status    String?
+  summary   String?
+  health    Int      @default(0) // 0-100%
+  lifecycle String   @default("Captured") // Captured, Processing, Enriched, Reviewed, Published, Archived, Deleted
+  facets    Json     @default("{}") // Composable traits
+  context   Json     @default("{}") // Situational metadata
+
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@index([entityId])
+}
+
+/// Tracking imports from everywhere.
+model SyncSource {
+  id            String   @id @default(uuid())
+  provider      String   // e.g., GitHub, Steam, Discord
+  externalId    String
+  externalUrl   String?
+  lastSync      DateTime @default(now())
+  syncToken     String?
+
+  assetId       String?  @unique
+  asset         Asset?   @relation(fields: [assetId], references: [id])
+}
+
+/// The raw underlying data. Decoupling the semantic Entity from its raw bytes.
+model Asset {
+  id           String   @id @default(uuid())
+  storageType  String   // 'local', 's3', 'url'
+  mime         String
+  size         Int?
+  checksum     String?
+  hash         String?
+  uri          String
+  thumbnailUrl String?
+  ocrText      String?
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  entities     Entity[]
+  syncSource   SyncSource?
+}
+
+// ------------------------------------------------------
+// 2. Knowledge Graph
+// ------------------------------------------------------
+
+/// Directed edges defining connections between Entities.
+model Relationship {
+  id          String   @id @default(uuid())
+  sourceId    String
+  targetId    String
+  type        String   // e.g., 'related_to', 'contains', 'depends_on'
+  weight      Float    @default(1.0)
+  confidence  Float    @default(1.0)
+  createdBy   String   // 'AI', 'User', 'Plugin'
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  source      Entity   @relation("SourceEntity", fields: [sourceId], references: [id], onDelete: Cascade)
+  target      Entity   @relation("TargetEntity", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId])
+  @@index([targetId])
+}
+
+/// System-generated actionable notices.
+model Observation {
+  id         String   @id @default(uuid())
+  entityId   String
+  type       String   // e.g., 'Possible duplicate', 'Missing metadata'
+  confidence Float    @default(1.0)
+  resolved   Boolean  @default(false)
+  dismissed  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  entity     Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+}
+
+// ------------------------------------------------------
+// 3. Organization & Views
+// ------------------------------------------------------
+
+model Space {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  icon        String?      @default("Folder")
+  createdAt   DateTime     @default(now())
+  collections Collection[]
+  entities    Entity[]
+}
+
+/// A dynamic View/Saved Search.
+model Collection {
+  id          String   @id @default(uuid())
+  spaceId     String
+  name        String
+  filter      Json     @default("{}") // Query representation
+  sort        Json     @default("{}") // Sort rules
+  grouping    String?
+  layout      String   @default("Cards") // Cards, Gallery, Timeline, Kanban, Table, etc.
+  createdAt   DateTime @default(now())
+
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  entities  Entity[]
+}
+
+// ------------------------------------------------------
+// 4. Event Sourcing, Workflows & Automations
+// ------------------------------------------------------
+
+/// Immutable log of the Entity's entire story.
+model TimelineEvent {
+  id        String   @id @default(uuid())
+  entityId  String
+  type      String   // e.g., 'Captured', 'OCR Finished', 'User Edited'
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+}
+
+/// Internal processing DAGs.
+model Workflow {
+  id          String   @id @default(uuid())
+  name        String
+  steps       Json     // DAG of steps
+  triggers    Json     // Trigger conditions
+  createdAt   DateTime @default(now())
+}
+
+/// User-defined behavior.
+model Automation {
+  id          String   @id @default(uuid())
+  name        String
+  condition   Json     // Trigger condition (If...)
+  action      Json     // Action (Then...)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+// ------------------------------------------------------
+// 5. Intelligence
+// ------------------------------------------------------
+
+/// Reversible AI proposals.
+model AISuggestion {
+  id          String   @id @default(uuid())
+  targetId    String   // Entity or Relationship ID
+  targetType  String   // 'Entity' or 'Relationship'
+  proposal    Json     // Proposed state changes
+  status      String   @default("Pending") // Pending, Accepted, Rejected
+  reason      String?
+  createdAt   DateTime @default(now())
+}
+
+/// Stateful tracking of user context.
+model AIMemory {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  recentInterests    Json     @default("[]")
+  frequentlyUsed     Json     @default("[]")
+  currentGoals       Json     @default("[]")
+  ignoredSuggestions Json     @default("[]")
+  updatedAt          DateTime @updatedAt
+}

@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pkos-postgres
+    environment:
+      POSTGRES_USER: pkos
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: pkos_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pkos_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: pkos-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - pkos_redisdata:/data
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    container_name: pkos-meilisearch
+    environment:
+      MEILI_MASTER_KEY: 'masterKey123!'
+      MEILI_ENV: 'development'
+    ports:
+      - "7700:7700"
+    volumes:
+      - pkos_meili_data:/meili_data
+    restart: unless-stopped
+
+volumes:
+  pkos_pgdata:
+  pkos_redisdata:
+  pkos_meili_data:
