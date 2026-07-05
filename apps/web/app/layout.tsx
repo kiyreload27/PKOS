@@ -4,7 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/layout/sidebar";
 import { StatusDock } from "@/components/layout/status-dock";
 import { ActivityStream } from "@/components/layout/activity-stream";
-import { GlobalSearch } from "@/components/layout/global-search";
+import { CommandPalette } from "@/components/CommandPalette";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -28,7 +28,7 @@ export default function RootLayout({
           <ActivityStream />
           <StatusDock />
         </main>
-        <GlobalSearch />
+        <CommandPalette />
       </body>
     </html>
   );

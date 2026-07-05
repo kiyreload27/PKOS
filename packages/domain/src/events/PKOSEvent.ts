@@ -17,7 +17,12 @@ export interface PKOSEvent<T = unknown> {
   readonly type: string;
   readonly aggregateId: string;
   readonly version: number;
-  readonly timestamp: Timestamp;
   readonly payload: T;
+  
+  readonly timestamp: Timestamp;
   readonly correlationId?: string;
+  readonly causationId?: string;
+  readonly captureId?: string;
+  readonly actor: string;
+  readonly source: string;
 }

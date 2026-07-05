@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@pkos/database": "workspace:*",
-    "bullmq": "^5.0.0",
-    "ioredis": "^5.0.0"
+    "@pkos/domain": "workspace:*",
+    "@pkos/projections": "workspace:*",
+    "bullmq": "^5.34.4",
+    "ioredis": "^5.4.2"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

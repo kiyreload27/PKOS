@@ -1,293 +1,150 @@
-"use client";
+import { prisma } from "@pkos/database";
+import { formatDistanceToNow, subDays } from "date-fns";
+import { Coffee, CheckCircle2, AlertTriangle, Lightbulb, ArrowRight, Activity, GitMerge } from "lucide-react";
+import Link from "next/link";
 
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Textarea } from "@/components/ui/textarea";
-import { Clipboard, Image as ImageIcon, Mic, Paperclip, CheckCircle2, ChevronRight, Zap, Folder, ChevronDown } from "lucide-react";
-import { LocalDetectionEngine, DetectionResult } from "@/lib/detection-engine";
-import * as LucideIcons from "lucide-react";
+export const dynamic = "force-dynamic";
 
-// Mock Focus Bar Data
-const currentFocus = {
-  topic: "Black Ops 7",
-  stats: ["12 captures", "3 new strategies"],
-};
+export default async function DailyBriefingPage() {
+  const yesterday = subDays(new Date(), 1);
 
-export default function MagicalCaptureDashboard() {
-  const [input, setInput] = useState("");
-  const [engine] = useState(() => new LocalDetectionEngine());
-  const [detection, setDetection] = useState<DetectionResult>({ status: "idle", confidence: 0, detectedType: "", entities: [], suggestions: [], capabilities: [] });
-  
-  // Pipeline State
-  const [pipelineState, setPipelineState] = useState<"idle" | "capturing" | "summarizing" | "relating" | "complete">("idle");
-  const [nodes, setNodes] = useState<{ id: number; x: number; y: number }[]>([
-    { id: 1, x: 20, y: 30 }, { id: 2, x: 80, y: 70 }, { id: 3, x: 50, y: 15 }
-  ]);
+  // 1. Yesterday's Activity
+  const capturesCount = await prisma.capture.count({ where: { receivedAt: { gte: yesterday } } });
+  const relationshipsCount = await prisma.relationship.count({ where: { createdAt: { gte: yesterday } } });
+  const newEntities = await prisma.entity.count({ where: { createdAt: { gte: yesterday } } });
 
-  // Project State
-  const [projects, setProjects] = useState<any[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
+  // 2. Needs Attention
+  const inboxItems = await prisma.inboxProjection.count();
+  const unreviewedObservations = await prisma.observation.count({ where: { state: "HYPOTHESIS" } });
+  const brokenResources = await prisma.resource.count({ where: { status: "ERROR" } });
 
-  useEffect(() => {
-    fetch("/api/projects").then(r => r.json()).then(data => setProjects(data.projects || []));
-  }, []);
+  // 3. Proactive Surfacing (Memory)
+  // Find an older capture or observation (simulating memory surfacing)
+  const oldCapture = await prisma.capture.findFirst({
+    where: { receivedAt: { lte: subDays(new Date(), 2) } },
+    orderBy: { receivedAt: "desc" }
+  });
 
-  // Handle Input Changes & progressive detection
-  useEffect(() => {
-    if (!input.trim()) {
-      setDetection({ status: "idle", confidence: 0, detectedType: "", entities: [], suggestions: [], capabilities: [] });
-      return;
-    }
-    
-    engine.analyze(input, (partial) => {
-      setDetection(partial);
-    }).then((final) => setDetection(final));
-    
-  }, [input, engine]);
-
-  const handleCapture = async () => {
-    if (!input.trim()) return;
-    
-    // Simulate Action Pipeline UI Flow
-    setPipelineState("capturing");
-    
-    // Background POST to actual API
-    fetch("/api/capture", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: input, projectId: selectedProjectId }),
-    }).catch(console.error);
-
-    // UI Pipeline Animation
-    setTimeout(() => setPipelineState("summarizing"), 800);
-    setTimeout(() => setPipelineState("relating"), 1600);
-    setTimeout(() => {
-      setPipelineState("complete");
-      // Add a node to the constellation to signify new knowledge
-      setNodes(prev => [...prev, { id: Date.now(), x: Math.random() * 90 + 5, y: Math.random() * 90 + 5 }]);
-    }, 2500);
-    setTimeout(() => {
-      setInput("");
-      setPipelineState("idle");
-    }, 4000);
-  };
+  const staleObservations = await prisma.observation.findMany({
+    where: { state: "SUPPORTED", updatedAt: { lte: subDays(new Date(), 7) } },
+    take: 2
+  });
 
   return (
-    <div className="relative h-full flex flex-col items-center justify-start p-8 overflow-y-auto overflow-x-hidden selection:bg-indigo-500/30">
+    <div className="min-h-screen bg-[#0A0A0A] text-slate-200 font-sans p-8 pt-24 max-w-4xl mx-auto selection:bg-indigo-500/30">
       
-      {/* 1. Subtle Constellation Background */}
-      <div className="fixed inset-0 pointer-events-none z-0 opacity-30">
-         {nodes.map(node => (
-           <motion.div 
-             key={node.id}
-             initial={{ scale: 0, opacity: 0 }}
-             animate={{ scale: 1, opacity: [0.5, 1, 0.5] }}
-             transition={{ opacity: { duration: 3 + Math.random() * 2, repeat: Infinity, ease: "easeInOut" } }}
-             className="absolute w-1.5 h-1.5 bg-indigo-400 rounded-full shadow-[0_0_12px_3px_rgba(99,102,241,0.6)]"
-             style={{ left: `${node.x}%`, top: `${node.y}%` }}
-           />
-         ))}
-      </div>
-
-      {/* 2. The Focus Bar */}
-      <div className="z-10 w-full max-w-5xl flex justify-between items-center mb-16 border-b border-neutral-800/50 pb-4 mt-2">
-        <div className="flex items-center space-x-6">
-          <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-widest text-neutral-500 font-semibold mb-1">Current Focus</span>
-            <div className="flex items-center space-x-3 text-white">
-              <Zap className="w-4 h-4 text-emerald-400" />
-              <span className="text-lg font-medium">{currentFocus.topic}</span>
-            </div>
-          </div>
-          <div className="h-8 w-px bg-neutral-800"></div>
-          <div className="flex space-x-6 text-sm text-neutral-400">
-            {currentFocus.stats.map(s => <span key={s}>{s}</span>)}
-          </div>
-        </div>
-        <button className="text-sm text-indigo-400 hover:text-indigo-300 flex items-center transition-colors">
-          Continue <ChevronRight className="w-4 h-4 ml-1" />
-        </button>
-      </div>
-
-      {/* 3. The Command Center */}
-      <div className="z-10 w-full max-w-3xl space-y-6 mt-8">
-        
-        {/* Title */}
-        <h1 className="text-3xl font-light text-white tracking-wide text-center mb-10">
-          Universal Capture
+      {/* Header */}
+      <div className="mb-16">
+        <h1 className="text-4xl font-light text-white tracking-tight flex items-center gap-4">
+          <Coffee className="w-8 h-8 text-emerald-400" />
+          Good morning, Ben.
         </h1>
-
-        {/* Input Area */}
-        <div className="relative group transition-all duration-500">
-          <div className={`absolute -inset-0.5 bg-gradient-to-r ${detection.status === 'detected' ? 'from-indigo-500/30 to-fuchsia-500/30' : 'from-neutral-800 to-neutral-700'} rounded-2xl blur opacity-70 group-focus-within:opacity-100 transition duration-700`}></div>
-          <div className="relative bg-neutral-950/80 border border-neutral-800/80 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col">
-            
-            <Textarea 
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={pipelineState !== "idle"}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleCapture();
-                }
-              }}
-              placeholder="Paste anything... (URLs, Compose Files, Strategies)"
-              className="min-h-[160px] w-full resize-none border-0 bg-transparent text-xl placeholder:text-neutral-600 focus-visible:ring-0 p-6 leading-relaxed disabled:opacity-50"
-            />
-
-            {/* Toolbar */}
-            <div className="flex items-center space-x-5 px-5 py-4 bg-neutral-900/50 border-t border-neutral-800/50 text-xs text-neutral-500 font-medium">
-              
-              {/* Project Selector */}
-              <div className="relative">
-                <button 
-                  onClick={() => setIsProjectDropdownOpen(!isProjectDropdownOpen)}
-                  className="flex items-center px-3 py-1.5 bg-neutral-950 border border-neutral-800 rounded-md hover:text-white transition-colors text-neutral-300"
-                >
-                  <Folder className="w-3.5 h-3.5 mr-2" />
-                  <span className="truncate max-w-[100px]">
-                    {selectedProjectId ? projects.find(p => p.id === selectedProjectId)?.name : "No Project"}
-                  </span>
-                  <ChevronDown className="w-3 h-3 ml-2 opacity-50" />
-                </button>
-
-                {isProjectDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-56 bg-neutral-900 border border-neutral-800 rounded-lg shadow-2xl py-1 z-50 overflow-hidden">
-                    <button 
-                        onClick={() => { setSelectedProjectId(null); setIsProjectDropdownOpen(false); }}
-                        className="w-full text-left px-4 py-2 hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors text-sm"
-                      >
-                        No Project
-                    </button>
-                    {projects.map(p => {
-                      const Icon = (LucideIcons as any)[p.icon || "Folder"] || Folder;
-                      return (
-                        <button 
-                          key={p.id}
-                          onClick={() => { setSelectedProjectId(p.id); setIsProjectDropdownOpen(false); }}
-                          className="w-full text-left px-4 py-2 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors flex items-center text-sm"
-                        >
-                          <Icon className="w-3.5 h-3.5 mr-3 opacity-50" />
-                          <span className="truncate">{p.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <div className="h-4 w-px bg-neutral-800"></div>
-
-              <button className="flex items-center hover:text-white transition-colors"><Clipboard className="w-4 h-4 mr-2"/> Paste</button>
-              <button className="flex items-center hover:text-white transition-colors"><Paperclip className="w-4 h-4 mr-2"/> Drop Files</button>
-              
-              <div className="flex-1"></div>
-              {pipelineState === "idle" && <span className="text-neutral-600 tracking-wider">READY</span>}
-            </div>
-          </div>
-        </div>
-
-        {/* Detection Engine Result & Action Pipeline */}
-        <AnimatePresence mode="wait">
-          
-          {pipelineState !== "idle" ? (
-            // Action Pipeline
-            <motion.div 
-              key="pipeline"
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              className="p-8 bg-neutral-900/60 rounded-2xl border border-indigo-500/20 backdrop-blur-xl shadow-2xl"
-            >
-              <div className="flex flex-col space-y-5">
-                <PipelineStep active={pipelineState === "capturing" || pipelineState === "summarizing" || pipelineState === "relating" || pipelineState === "complete"} label="Captured ✓" />
-                <PipelineStep active={pipelineState === "summarizing" || pipelineState === "relating" || pipelineState === "complete"} label="Creating Entity..." />
-                <PipelineStep active={pipelineState === "relating" || pipelineState === "complete"} label="Generating Summary..." />
-                <PipelineStep active={pipelineState === "complete"} label="Finding Relationships..." />
-                
-                {pipelineState === "complete" && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="pt-3 text-emerald-400 font-medium flex items-center text-lg">
-                    <CheckCircle2 className="w-5 h-5 mr-2" /> Complete
-                  </motion.div>
-                )}
-              </div>
-            </motion.div>
-          ) : detection.status === "detected" && detection.confidence > 0.4 ? (
-            // Detection Panel
-            <motion.div 
-              key="detection"
-              initial={{ opacity: 0, y: -10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0 }}
-              className="p-2 space-y-6"
-            >
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center space-x-2 text-indigo-400">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                  </span>
-                  <span className="text-base tracking-wide">PKOS {detection.confidence < 0.9 ? 'thinks this is' : 'understands'}</span>
-                  <strong className="text-white text-base ml-2">{detection.detectedType}</strong>
-                </div>
-                <div className="text-neutral-400 text-xs bg-neutral-900/80 px-3 py-1.5 rounded-md border border-neutral-800">
-                  Confidence <span className="text-indigo-400 font-mono ml-2">{(detection.confidence * 100).toFixed(0)}%</span>
-                </div>
-              </div>
-
-              {/* Progressive Entities */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {detection.entities.map((ent, i) => (
-                  <motion.div 
-                    key={ent.type}
-                    initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.2 }}
-                    className="flex flex-col p-4 bg-neutral-900/60 border border-neutral-800/80 rounded-xl"
-                  >
-                    <span className="text-[10px] uppercase text-neutral-500 mb-2 font-medium tracking-wider">{ent.type}</span>
-                    <span className="text-sm text-neutral-200 flex items-center font-medium">
-                      <span className="mr-2 text-base">{ent.icon}</span> {ent.value}
-                    </span>
-                  </motion.div>
-                ))}
-              </div>
-              
-              {/* Contextual Quick Actions */}
-              <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: detection.entities.length * 0.2 + 0.3 }}
-                className="flex flex-wrap gap-3 pt-2"
-              >
-                {detection.capabilities.map((cap, i) => (
-                  <button 
-                    key={cap.label} 
-                    onClick={() => {
-                      if (cap.action === "save") {
-                        handleCapture();
-                      } else if (cap.action === "tag") {
-                        setIsProjectDropdownOpen(true);
-                      } else {
-                        handleCapture();
-                      }
-                    }}
-                    className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all ${i === 0 ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/25' : 'bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 border border-neutral-700/50'}`}
-                  >
-                    {cap.label}
-                  </button>
-                ))}
-              </motion.div>
-
-            </motion.div>
-          ) : null}
-
-        </AnimatePresence>
+        <p className="text-slate-400 mt-3 text-lg">Here is your personal knowledge briefing for today.</p>
       </div>
 
-    </div>
-  );
-}
+      <div className="space-y-12">
+        
+        {/* Yesterday's Activity */}
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500 mb-6 flex items-center gap-2">
+            <Activity className="w-4 h-4" />
+            Yesterday you:
+          </h2>
+          <ul className="space-y-4">
+            <li className="flex items-center gap-4 text-lg text-slate-300">
+              <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+              Captured <strong>{capturesCount}</strong> new items
+            </li>
+            <li className="flex items-center gap-4 text-lg text-slate-300">
+              <div className="w-2 h-2 rounded-full bg-fuchsia-500"></div>
+              Created <strong>{relationshipsCount}</strong> relationships
+            </li>
+            <li className="flex items-center gap-4 text-lg text-slate-300">
+              <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+              Discovered <strong>{newEntities}</strong> new entities
+            </li>
+          </ul>
+        </section>
 
-function PipelineStep({ label, active }: { label: string; active: boolean }) {
-  return (
-    <div className={`flex items-center space-x-4 transition-colors duration-500 ${active ? 'text-white' : 'text-neutral-600'}`}>
-      <div className={`w-2 h-2 rounded-full transition-all duration-500 ${active ? 'bg-indigo-500 shadow-[0_0_8px_2px_rgba(99,102,241,0.5)]' : 'bg-neutral-700'}`} />
-      <span className="text-lg tracking-wide font-light">{label}</span>
+        <div className="h-px bg-slate-800/50 w-full" />
+
+        {/* Needs Attention */}
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500 mb-6 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            Things that need attention:
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Link href="/inbox" className="group p-5 rounded-2xl border border-slate-800/60 bg-slate-900/30 hover:bg-slate-800/50 hover:border-slate-700 transition-all flex items-start gap-4">
+              <div className="bg-amber-500/10 p-2 rounded-lg">
+                <GitMerge className="w-5 h-5 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="font-medium text-white group-hover:text-amber-400 transition-colors">AI Inbox</h3>
+                <p className="text-sm text-slate-400 mt-1">{inboxItems} items waiting for your review</p>
+              </div>
+            </Link>
+
+            <div className="group p-5 rounded-2xl border border-slate-800/60 bg-slate-900/30 hover:bg-slate-800/50 hover:border-slate-700 transition-all flex items-start gap-4 cursor-pointer">
+              <div className="bg-rose-500/10 p-2 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-rose-500" />
+              </div>
+              <div>
+                <h3 className="font-medium text-white group-hover:text-rose-400 transition-colors">Broken Syncs</h3>
+                <p className="text-sm text-slate-400 mt-1">{brokenResources} resources failed to synchronize</p>
+              </div>
+            </div>
+
+            <div className="group p-5 rounded-2xl border border-slate-800/60 bg-slate-900/30 hover:bg-slate-800/50 hover:border-slate-700 transition-all flex items-start gap-4 cursor-pointer">
+              <div className="bg-blue-500/10 p-2 rounded-lg">
+                <CheckCircle2 className="w-5 h-5 text-blue-500" />
+              </div>
+              <div>
+                <h3 className="font-medium text-white group-hover:text-blue-400 transition-colors">Pending Observations</h3>
+                <p className="text-sm text-slate-400 mt-1">{unreviewedObservations} hypotheses need verification</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="h-px bg-slate-800/50 w-full" />
+
+        {/* You may have forgotten */}
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-widest text-slate-500 mb-6 flex items-center gap-2">
+            <Lightbulb className="w-4 h-4 text-yellow-500" />
+            You may have forgotten:
+          </h2>
+          <div className="space-y-4">
+            {oldCapture && (
+              <div className="p-4 pl-6 border-l-2 border-slate-700 hover:border-yellow-500/50 transition-colors cursor-pointer">
+                <h4 className="text-slate-300 font-medium mb-1">A Capture from {formatDistanceToNow(new Date(oldCapture.receivedAt))} ago</h4>
+                <p className="text-sm text-slate-500 line-clamp-1">{oldCapture.content}</p>
+              </div>
+            )}
+            
+            {staleObservations.map(obs => (
+              <div key={obs.id} className="p-4 pl-6 border-l-2 border-slate-700 hover:border-yellow-500/50 transition-colors cursor-pointer">
+                <h4 className="text-slate-300 font-medium mb-1">Observation: {obs.statement}</h4>
+                <p className="text-sm text-slate-500">Last updated {formatDistanceToNow(new Date(obs.updatedAt))} ago</p>
+              </div>
+            ))}
+
+            {!oldCapture && staleObservations.length === 0 && (
+              <p className="text-slate-500 italic">No forgotten memories to surface right now.</p>
+            )}
+          </div>
+        </section>
+
+        {/* Suggested Next Action */}
+        <section className="pt-8">
+          <button className="w-full sm:w-auto flex items-center justify-between gap-6 px-6 py-4 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-xl font-medium transition-all shadow-lg shadow-indigo-500/20 group">
+            <span className="text-lg">Review AI Inbox</span>
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </button>
+        </section>
+
+      </div>
     </div>
   );
 }

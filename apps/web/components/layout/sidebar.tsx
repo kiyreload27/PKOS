@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Home, PlusSquare, Search, Folder, Network, Settings, Plus, Trash2 } from "lucide-react";
+import { Home, PlusSquare, Search, Folder, Network, Settings, Plus, Trash2, BrainCircuit } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation";
 const navItems = [
   { icon: Home, label: "Home", href: "/" },
   { icon: PlusSquare, label: "Capture", href: "/capture" },
+  { icon: BrainCircuit, label: "AI Inbox", href: "/inbox" },
   { icon: Search, label: "Search", href: "#", shortcut: "⌘K" },
 ];
 
