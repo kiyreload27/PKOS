@@ -3,10 +3,20 @@ import { prisma } from "@pkos/database";
 
 export async function GET() {
   try {
-    const spaces = await prisma.space.findMany({
-      orderBy: { createdAt: "asc" },
+    // Replaced legacy Space with Context
+    const contexts = await prisma.context.findMany({
+      orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json({ projects: spaces });
+
+    const results = contexts.map(c => ({
+      id: c.id,
+      name: c.name,
+      description: c.type,
+      itemCount: c.relatedEntities.length,
+      createdAt: c.createdAt,
+    }));
+
+    return NextResponse.json({ projects: results });
   } catch (error) {
     console.error("GET Projects Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
@@ -15,20 +25,25 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { name, icon } = await req.json();
-    
-    if (!name) {
+    const { name, description } = await req.json();
+
+    if (!name || name.trim() === "") {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
-    
-    const space = await prisma.space.create({
+
+    const context = await prisma.context.create({
       data: {
-        name,
-        icon: icon || "Folder",
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        type: description || "Space",
+        isActive: false,
+        participants: [],
+        activeResources: [],
+        relatedEntities: [],
       },
     });
-    
-    return NextResponse.json({ project: space }, { status: 201 });
+
+    return NextResponse.json(context, { status: 201 });
   } catch (error) {
     console.error("POST Project Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

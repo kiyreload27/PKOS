@@ -30,7 +30,7 @@ export function Sidebar() {
       const res = await fetch("/api/projects");
       if (res.ok) {
         const data = await res.json();
-        setProjects(data.projects);
+        setProjects(data.projects || []);
       }
     } catch (e) {
       console.error(e);

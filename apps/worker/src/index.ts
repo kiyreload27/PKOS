@@ -1,43 +1,25 @@
 import { Worker } from "bullmq";
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 import { prisma } from "@pkos/database";
 
+// Create a standard Redis instance
 const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
   maxRetriesPerRequest: null,
 });
 
 console.log("🚀 Background Worker starting...");
 
+// We will use the new PKOSEvent stream or Commands later.
+// For now, we mock the worker to just log and not crash since we stripped out legacy Prisma models.
+
 const worker = new Worker(
   "pkos-workflows",
   async (job) => {
-    const { entityId, content } = job.data;
-    console.log(`[Job ${job.id}] Processing Entity: ${entityId}`);
-
-    // Simulate AI Work
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Update entity
-    await prisma.entityState.updateMany({
-      where: { entityId },
-      data: {
-        title: "Processed Capture",
-        status: "Enriched",
-      },
-    });
-
-    // Add Timeline Event
-    await prisma.timelineEvent.create({
-      data: {
-        entityId,
-        type: "PROCESSING_COMPLETE",
-        message: "AI background workflow completed successfully.",
-      },
-    });
-
-    console.log(`[Job ${job.id}] Finished processing ${entityId}`);
+    console.log(`[Job ${job.id}] Processing Job: ${job.name}`);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    console.log(`[Job ${job.id}] Finished processing ${job.name}`);
   },
-  { connection }
+  { connection: connection as any }
 );
 
 worker.on("completed", (job) => {

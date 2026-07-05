@@ -1,60 +1,48 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@pkos/database";
 import { Queue } from "bullmq";
-import Redis from "ioredis";
 
-// Reuse the standard Redis connection
-const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
-  maxRetriesPerRequest: null,
+const pkosQueue = new Queue("pkos-workflows", {
+  connection: {
+    url: process.env.REDIS_URL || "redis://localhost:6379",
+  },
 });
-
-const workflowQueue = new Queue("pkos-workflows", { connection });
 
 export async function POST(req: Request) {
   try {
-    const { content, projectId } = await req.json();
+    const body = await req.json();
+    const content = body.content || "Empty Capture";
 
-    if (!content) {
-      return NextResponse.json({ error: "Content is required" }, { status: 400 });
-    }
-
-    // 1. Create the base Entity
     const entity = await prisma.entity.create({
       data: {
-        kind: "UNKNOWN",
-        owner: "system",
-        spaceId: projectId || null,
+        id: crypto.randomUUID(),
+        typeId: "Note",
+        owner: "User",
+        externalIds: [],
+        aliases: [content.substring(0, 50)],
+        traits: ["TextContent"],
+        capabilities: ["Searchable"],
       },
     });
 
-    // 2. Create the mutable EntityState
-    await prisma.entityState.create({
+    await prisma.pKOSEvent.create({
       data: {
-        entityId: entity.id,
-        title: content.substring(0, 50) + (content.length > 50 ? "..." : ""),
-        status: "Captured",
-        rawCapture: content,
+        id: crypto.randomUUID(),
+        aggregateId: entity.id,
+        type: "ENTITY_CREATED",
+        version: 1,
+        payload: { content },
       },
     });
 
-    // 3. Emit Timeline Event
-    await prisma.timelineEvent.create({
-      data: {
-        entityId: entity.id,
-        type: "CAPTURE_RECEIVED",
-        message: "New information captured via Universal Inbox",
-      },
-    });
-
-    // 4. Dispatch to Background Worker
-    await workflowQueue.add("process-entity", {
+    await pkosQueue.add("process-capture", {
       entityId: entity.id,
       content,
     });
 
     return NextResponse.json({ success: true, entityId: entity.id });
   } catch (error) {
-    console.error("Capture API Error:", error);
+    console.error("Capture Error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
