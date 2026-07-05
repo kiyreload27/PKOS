@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Home, PlusSquare, Search, Folder, Network, Settings, Plus, Trash2, BrainCircuit } from "lucide-react";
+import { Home, PlusSquare, Search, Folder, Network, Settings, Plus, Trash2, BrainCircuit, Check, X } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ export function Sidebar() {
   const [projects, setProjects] = useState<any[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const fetchProjects = async () => {
     try {
@@ -64,20 +65,18 @@ export function Sidebar() {
     }
   };
 
-  const handleDeleteProject = async (e: React.MouseEvent, id: string) => {
-    e.preventDefault();
-    if (confirm("Are you sure you want to delete this project?")) {
-      try {
-        const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
-        if (res.ok) {
-          fetchProjects();
-          if (pathname === `/projects/${id}`) {
-            router.push("/");
-          }
+  const handleDeleteProject = async (id: string) => {
+    try {
+      const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setConfirmDeleteId(null);
+        fetchProjects();
+        if (pathname === `/projects/${id}`) {
+          router.push("/");
         }
-      } catch (e) {
-        console.error(e);
       }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -93,18 +92,31 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto px-3 space-y-8 pb-4">
         
         <div className="space-y-0.5">
-          {navItems.map((item) => (
-            <Link key={item.label} href={item.href} className={cn(
-              "flex items-center justify-between px-3 py-2 rounded-lg transition-colors group",
-              pathname === item.href ? "bg-neutral-800/50 text-white" : "hover:bg-neutral-900 hover:text-white"
-            )}>
-              <div className="flex items-center space-x-3">
-                <item.icon className="w-4 h-4 opacity-70 group-hover:opacity-100" />
-                <span>{item.label}</span>
-              </div>
-              {item.shortcut && <kbd className="font-sans text-[10px] uppercase bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 border border-neutral-700/50">{item.shortcut}</kbd>}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const isSearch = item.label === "Search";
+            return (
+              <Link 
+                key={item.label} 
+                href={item.href} 
+                onClick={(e) => {
+                  if (isSearch) {
+                    e.preventDefault();
+                    window.dispatchEvent(new CustomEvent("open-command-palette"));
+                  }
+                }}
+                className={cn(
+                  "flex items-center justify-between px-3 py-2 rounded-lg transition-colors group",
+                  pathname === item.href ? "bg-neutral-800/50 text-white" : "hover:bg-neutral-900 hover:text-white"
+                )}
+              >
+                <div className="flex items-center space-x-3">
+                  <item.icon className="w-4 h-4 opacity-70 group-hover:opacity-100" />
+                  <span>{item.label}</span>
+                </div>
+                {item.shortcut && <kbd className="font-sans text-[10px] uppercase bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 border border-neutral-700/50">{item.shortcut}</kbd>}
+              </Link>
+            );
+          })}
         </div>
 
         <div className="space-y-1">
@@ -134,18 +146,34 @@ export function Sidebar() {
               const Icon = (LucideIcons as any)[project.icon || "Folder"] || Folder;
               const href = `/projects/${project.id}`;
               const isActive = pathname === href;
+              const isConfirming = confirmDeleteId === project.id;
+              
               return (
                 <Link key={project.id} href={href} className={cn(
                   "flex items-center justify-between px-3 py-2 rounded-lg transition-colors group",
-                  isActive ? "bg-neutral-800/50 text-white" : "hover:bg-neutral-900 hover:text-white"
+                  isActive ? "bg-neutral-800/50 text-white" : "hover:bg-neutral-900 hover:text-white",
+                  isConfirming && "bg-red-950/30 border border-red-900/50"
                 )}>
-                  <div className="flex items-center space-x-3">
-                    <Icon className="w-4 h-4 opacity-70 group-hover:opacity-100" />
-                    <span className="truncate max-w-[120px]">{project.name}</span>
+                  <div className="flex items-center space-x-3 truncate">
+                    <Icon className={cn("w-4 h-4 opacity-70 group-hover:opacity-100 flex-shrink-0", isConfirming && "text-red-400 opacity-100")} />
+                    <span className="truncate max-w-[110px]">{isConfirming ? "Confirm Delete?" : project.name}</span>
                   </div>
-                  <button onClick={(e) => handleDeleteProject(e, project.id)} className="opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-red-400 transition-all">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex space-x-1">
+                    {isConfirming ? (
+                      <>
+                        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteProject(project.id); }} className="text-red-400 hover:text-red-300 px-1 transition-colors">
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(null); }} className="text-neutral-500 hover:text-neutral-300 px-1 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(project.id); }} className="opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-red-400 transition-all px-1">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </Link>
               );
             })}

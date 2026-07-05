@@ -142,7 +142,7 @@ export default function MagicalCaptureDashboard() {
         {/* Input Area */}
         <div className="relative group transition-all duration-500">
           <div className={`absolute -inset-0.5 bg-gradient-to-r ${detection.status === 'detected' ? 'from-indigo-500/30 to-fuchsia-500/30' : 'from-neutral-800 to-neutral-700'} rounded-2xl blur opacity-70 group-focus-within:opacity-100 transition duration-700`}></div>
-          <div className="relative bg-neutral-950/80 border border-neutral-800/80 rounded-2xl shadow-2xl backdrop-blur-xl overflow-hidden flex flex-col">
+          <div className="relative bg-neutral-950/80 border border-neutral-800/80 rounded-2xl shadow-2xl backdrop-blur-xl flex flex-col">
             
             <Textarea 
               value={input}
@@ -155,11 +155,11 @@ export default function MagicalCaptureDashboard() {
                 }
               }}
               placeholder="Paste anything... (URLs, Compose Files, Strategies)"
-              className="min-h-[160px] w-full resize-none border-0 bg-transparent text-xl placeholder:text-neutral-600 focus-visible:ring-0 p-6 leading-relaxed disabled:opacity-50"
+              className="min-h-[160px] w-full resize-none border-0 bg-transparent text-xl placeholder:text-neutral-600 focus-visible:ring-0 p-6 leading-relaxed disabled:opacity-50 rounded-t-2xl"
             />
 
             {/* Toolbar */}
-            <div className="flex items-center space-x-5 px-5 py-4 bg-neutral-900/50 border-t border-neutral-800/50 text-xs text-neutral-500 font-medium">
+            <div className="flex items-center space-x-5 px-5 py-4 bg-neutral-900/50 border-t border-neutral-800/50 text-xs text-neutral-500 font-medium rounded-b-2xl">
               
               {/* Project Selector */}
               <div className="relative">
