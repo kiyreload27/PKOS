@@ -37,6 +37,7 @@ yarn-error.log*
 .DS_Store
 *.pem
 VISION.md
+PKOS_AI_HANDOVER.md
 
 # Export
 export_code.md
