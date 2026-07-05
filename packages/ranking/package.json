@@ -1,0 +1,7 @@
+{
+  "name": "@pkos/ranking",
+  "version": "1.0.0",
+  "main": "./src/ranker.ts",
+  "types": "./src/ranker.ts",
+  "dependencies": {}
+}
